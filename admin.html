@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TajCrash Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-box{max-width:800px;margin:20px auto;padding:16px;border:1px solid #222;background:#141416;border-radius:12px;}
+    .admin-box h2{margin-top:0}
+    .admin-grid{display:grid;gap:12px}
+    input,select,button{width:100%;margin:6px 0 10px;padding:10px;border-radius:10px;border:1px solid #2a2b2e;background:#121214;color:#fff}
+    .row{display:flex;gap:8px}
+    .small{font-size:12px;color:#888}
+    .ok{color:#5cb85c}
+  </style>
+  <script>
+    const PASS='ShahroM1';
+    function auth(){
+      const p = prompt('Пароль администратора:');
+      if(p!==PASS){ alert('Неверный пароль'); location.href='index.html'; }
+      else { document.getElementById('panel').style.display='block'; }
+    }
+    window.addEventListener('DOMContentLoaded', auth);
+  </script>
+</head>
+<body>
+  <div class="admin-box" id="panel" style="display:none">
+    <h2>Админ-панель TajCrash</h2>
+
+    <div class="admin-grid">
+      <section>
+        <h3>Управление Crash</h3>
+        <div class="row">
+          <input id="manualCoef" type="number" step="0.01" placeholder="Ручной коэффициент (например 1.25)" />
+          <button onclick="setManual()">Установить</button>
+        </div>
+        <div class="row">
+          <button onclick="forceX10000()">Выдать X10000 (1 раз в день)</button>
+        </div>
+        <div class="row">
+          <input id="p1" type="number" step="0.01" placeholder="Вероятн. 1.01-1.50 (0.70)" />
+          <input id="p2" type="number" step="0.01" placeholder="Вероятн. 1.50-3.0 (0.25)" />
+          <input id="p3" type="number" step="0.01" placeholder="Вероятн. 3.0-100 (0.05)" />
+          <button onclick="setAlgo()">Сохранить распределение</button>
+        </div>
+        <div class="small">Совет: p1+p2+p3 должно быть 1.00</div>
+      </section>
+
+      <section>
+        <h3>Управление счетами</h3>
+        <input id="userId" placeholder="Telegram ID или username" />
+        <div class="row">
+          <input id="delta" type="number" step="0.01" placeholder="Сумма (+/-)" />
+          <button onclick="adj()">Изменить баланс</button>
+        </div>
+        <div id="adjMsg" class="small ok"></div>
+      </section>
+
+      <section>
+        <h3>Промокоды</h3>
+        <input id="promoCode" placeholder="Промокод (например TAJ2025)" />
+        <div class="row">
+          <input id="promoBonus" type="number" step="0.01" placeholder="Бонус (сомони)" />
+          <input id="promoLimit" type="number" placeholder="Лимит активаций" />
+          <button onclick="addPromo()">Добавить</button>
+        </div>
+        <div id="promoMsg" class="small ok"></div>
+      </section>
+
+      <section>
+        <h3>Выводы</h3>
+        <div class="row">
+          <input id="wdId" placeholder="ID заявки (из истории)" />
+          <select id="wdStatus">
+            <option value="processing">обрабатывается</option>
+            <option value="done">выполнен</option>
+            <option value="cancel">отменен (вернуть на баланс)</option>
+          </select>
+          <button onclick="setWithdraw()">Обновить статус</button>
+        </div>
+        <div class="small">Отмена заявки вернёт сумму игроку на баланс.</div>
+        <div id="wdMsg" class="small ok"></div>
+      </section>
+    </div>
+  </div>
+
+<script>
+  const LS = { get:(k,d=null)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}, set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)) };
+  const tgId = LS.get('tg_id');
+
+  function setManual(){
+    const v = parseFloat(document.getElementById('manualCoef').value);
+    if(!v || v<1.01) return alert('Некорректно');
+    LS.set('manual_crash', v);
+    alert('Ок: ручной коэффициент установлен');
+  }
+  function forceX10000(){
+    const today = new Date().toISOString().slice(0,10);
+    if(LS.get('x10000_'+today)) return alert('X10000 уже активирован сегодня');
+    LS.set('force_x10000', true);
+    alert('Ок: X10000 будет в ближайшем раунде');
+  }
+  function setAlgo(){
+    const p1 = parseFloat(document.getElementById('p1').value||'0.70');
+    const p2 = parseFloat(document.getElementById('p2').value||'0.25');
+    const p3 = parseFloat(document.getElementById('p3').value||'0.05');
+    if(Math.abs((p1+p2+p3)-1) > 0.001) return alert('Сумма вероятностей должна быть 1.00');
+    LS.set('crash_algo', {mode:'auto', p:[p1,p2,p3]});
+    alert('Сохранено');
+  }
+
+  function adj(){
+    const delta = parseFloat(document.getElementById('delta').value);
+    if(isNaN(delta)) return;
+    const id = document.getElementById('userId').value.trim() || tgId;
+    const key = 'balance_'+id;
+    const cur = Number(LS.get(key, 0));
+    LS.set(key, cur + delta);
+    document.getElementById('adjMsg').textContent = 'Баланс обновлён. Новый: ' + (cur+delta).toFixed(2);
+  }
+
+  function setWithdraw(){
+    const id = document.getElementById('wdId').value.trim();
+    const st = document.getElementById('wdStatus').value;
+    const key = 'history_'+tgId;
+    const all = LS.get(key, []);
+    const idx = isNaN(parseInt(id)) ? 0 : parseInt(id);
+    if(!all[idx]) return alert('Не найдено');
+    const item = all[idx];
+    if(item.type!=='withdraw') return alert('Это не вывод');
+    if(st==='cancel'){
+      const balKey = 'balance_'+tgId;
+      const cur = Number(LS.get(balKey,0));
+      const sum = Number(item.amount||0);
+      LS.set(balKey, cur + sum);
+    }
+    item.status = st;
+    all[idx] = item;
+    LS.set(key, all);
+    document.getElementById('wdMsg').textContent = 'Статус обновлён: '+st;
+  }
+
+  function addPromo(){
+    const code = (document.getElementById('promoCode').value||'').trim().toUpperCase();
+    const bonus = parseFloat(document.getElementById('promoBonus').value||'0');
+    const limit = parseInt(document.getElementById('promoLimit').value||'0');
+    if(!code || !bonus || !limit) return alert('Заполните поля');
+    const list = LS.get('promos', {});
+    list[code] = {bonus, limit, used:0};
+    LS.set('promos', list);
+    document.getElementById('promoMsg').textContent = 'Промокод добавлен: '+code+' (+'+bonus+', лимит '+limit+')';
+  }
+</script>
+</body>
+</html>
