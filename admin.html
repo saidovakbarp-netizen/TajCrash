@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TajCrash Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .wrap{max-width:760px;margin:30px auto;background:var(--panel);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+    input,button{width:100%;margin:6px 0 10px;padding:10px;border-radius:10px;border:1px solid #30384b;background:#0e131e;color:#fff}
+    .row{display:flex;gap:8px}
+  </style>
+  <script>
+    const PASS='ShahroM1';
+    function gate(){ const p=prompt('Пароль админа:'); if(p!==PASS){ alert('Неверно'); location.href='index.html'; } else { document.getElementById('panel').style.display='block'; } }
+    window.addEventListener('DOMContentLoaded', gate);
+  </script>
+</head>
+<body>
+<div id="panel" class="wrap" style="display:none">
+  <h2>Админ-панель</h2>
+  <h3>Crash</h3>
+  <div class="row">
+    <input id="p1" type="number" step="0.01" placeholder="P(1.01–1.50) 0.70">
+    <input id="p2" type="number" step="0.01" placeholder="P(1.50–3.00) 0.25">
+    <input id="p3" type="number" step="0.01" placeholder="P(3–100) 0.05">
+  </div>
+  <button onclick="saveAlgo()">Сохранить распределение</button>
+  <button onclick="x10000()">Выдать X10000 (1 раз в день)</button>
+
+  <h3 style="margin-top:18px">Баланс</h3>
+  <div class="row">
+    <input id="delta" type="number" step="0.01" placeholder="Сумма (+/-) текущему игроку">
+    <button onclick="adj()">Изменить</button>
+  </div>
+</div>
+
+<script>
+  const LS={get:(k,d=null)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+  const ID = LS.get('tg_id') || 0;
+  function saveAlgo(){
+    const p1=parseFloat(document.getElementById('p1').value||'0.70');
+    const p2=parseFloat(document.getElementById('p2').value||'0.25');
+    const p3=parseFloat(document.getElementById('p3').value||'0.05');
+    if(Math.abs((p1+p2+p3)-1)>0.001) return alert('Сумма вероятностей должна быть 1.00');
+    LS.set('crash_algo',{p:[p1,p2,p3]}); alert('Сохранено');
+  }
+  function x10000(){ const d=new Date().toISOString().slice(0,10); if(LS.get('x10000_'+d)) return alert('Уже было сегодня'); LS.set('force_x10000',true); alert('Ок, следующий раунд 10000x'); }
+  function adj(){ const key='balance_'+ID; const cur=Number(LS.get(key,0)); const d=parseFloat(document.getElementById('delta').value||'0'); LS.set(key,cur+d); alert('Новый баланс: '+(cur+d).toFixed(2)); }
+</script>
+</body>
+</html>
