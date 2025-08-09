@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TajCrash Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <style>.wrap{max-width:960px;margin:30px auto;background:var(--panel);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:16px}input,button,select{width:100%;margin:6px 0 10px;padding:10px;border-radius:10px;border:1px solid #30384b;background:#0e131e;color:#fff}.row{display:flex;gap:8px}</style>
+  <script>
+    const PASS='ShahroM1';
+    function gate(){ const p=prompt('Пароль админа:'); if(p!==PASS){ alert('Неверно'); location.href='index.html'; } else { document.getElementById('panel').style.display='block'; draw(); } }
+    window.addEventListener('DOMContentLoaded',gate);
+  </script>
+</head>
+<body>
+  <div id="panel" class="wrap" style="display:none">
+    <h2>Админ‑панель</h2>
+
+    <h3>Алгоритм Crash (одинаковый раунд для всех)</h3>
+    <div class="row">
+      <input id="p1" type="number" step="0.01" placeholder="P(1.01–1.50) 0.70">
+      <input id="p2" type="number" step="0.01" placeholder="P(1.50–3.00) 0.25">
+      <input id="p3" type="number" step="0.01" placeholder="P(3–100) 0.05">
+    </div>
+    <div class="row">
+      <input id="salt" placeholder="Секрет‑соль (любой текст)">
+      <button onclick="saveAlgo()">Сохранить</button>
+      <button onclick="x10000()">Выдать X10000 (1 раз/день)</button>
+    </div>
+
+    <h3 style="margin-top:18px">Баланс пользователя по Telegram ID</h3>
+    <div class="row"><input id="uid" placeholder="Например 8461445918"><input id="delta" type="number" step="0.01" placeholder="Сумма +/‑"><button onclick="adj()">Изменить</button></div>
+
+    <h3 style="margin-top:18px">Заявки на вывод</h3>
+    <table class="table" id="wdTable">
+      <thead><tr><th>ID</th><th>User</th><th>Сумма</th><th>Метод</th><th>Адрес</th><th>Время</th><th>Статус</th><th>Действия</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+<script>
+  const LS={get:(k,d=null)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+
+  function saveAlgo(){
+    const p1=parseFloat(document.getElementById('p1').value||'0.70');
+    const p2=parseFloat(document.getElementById('p2').value||'0.25');
+    const p3=parseFloat(document.getElementById('p3').value||'0.05');
+    const salt=(document.getElementById('salt').value||'tajcrash').trim();
+    if(Math.abs((p1+p2+p3)-1)>0.001) return alert('Сумма вероятностей должна быть 1.00');
+    LS.set('crash_algo',{p:[p1,p2,p3],salt}); alert('Сохранено');
+  }
+  function x10000(){ const d=new Date().toISOString().slice(0,10); if(LS.get('x10000_'+d)) return alert('Уже было сегодня'); LS.set('force_x10000',true); alert('Ок, следующий раунд 10000x'); }
+
+  function adj(){
+    const id=(document.getElementById('uid').value||'').trim();
+    if(!id) return alert('ID пустой');
+    const key='balance_'+id; const cur=Number(LS.get(key,0)); const d=parseFloat(document.getElementById('delta').value||'0');
+    LS.set(key, cur+d); alert('Новый баланс: '+(cur+d).toFixed(2));
+  }
+
+  function draw(){
+    const tbody=document.querySelector('#wdTable tbody'); tbody.innerHTML='';
+    (LS.get('wd_requests',[])||[]).forEach((r,i)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td>'+r.id+'</td><td>'+r.user+'</td><td>'+r.amount.toFixed(2)+'</td><td>'+r.method+'</td><td>'+r.addr+'</td><td>'+r.time+'</td><td>'+r.status+'</td>';
+      const td=document.createElement('td');
+      const ok=document.createElement('button'); ok.textContent='Выплатить';
+      ok.onclick=()=>{ if(r.status!=='pending') return; r.status='paid'; const key="balance_"+r.uid; const cur=Number(LS.get(key,0)); LS.set(key, Math.max(0,cur-r.amount)); saveList(); draw(); };
+      const no=document.createElement('button'); no.textContent='Отклонить';
+      no.onclick=()=>{ if(r.status!=='pending') return; r.status='canceled'; const key="balance_"+r.uid; const cur=Number(LS.get(key,0)); LS.set(key, cur+r.amount); saveList(); draw(); };
+      td.appendChild(ok); td.appendChild(no); tr.appendChild(td); tbody.appendChild(tr);
+    });
+  }
+  function saveList(){ const list=LS.get('wd_requests',[]); LS.set('wd_requests',list); }
+</script>
+</body>
+</html>
